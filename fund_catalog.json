@@ -1,0 +1,94 @@
+[
+  {
+    "name": "Harbor Ridge Capital",
+    "sectors": [
+      "business services",
+      "industrial"
+    ],
+    "subsector_keywords": [
+      "HVAC",
+      "plumbing",
+      "facility services",
+      "route based"
+    ],
+    "deal_types": [
+      "control",
+      "platform",
+      "add on"
+    ],
+    "check_size_usd_min": 15000000,
+    "check_size_usd_max": 100000000,
+    "revenue_floor_usd": 8000000,
+    "ebitda_floor_usd": 2000000,
+    "geographies": [
+      "US",
+      "Canada"
+    ],
+    "thesis_notes": "Recurring revenue field services and route based models",
+    "example_deals": [
+      "AirPro Service Group",
+      "CleanTech Facilities Partners"
+    ]
+  },
+  {
+    "name": "Northbank Partners",
+    "sectors": [
+      "software",
+      "business services"
+    ],
+    "subsector_keywords": [
+      "vertical SaaS",
+      "workflow",
+      "field service software"
+    ],
+    "deal_types": [
+      "majority",
+      "minority growth",
+      "platform"
+    ],
+    "check_size_usd_min": 10000000,
+    "check_size_usd_max": 75000000,
+    "revenue_floor_usd": 5000000,
+    "ebitda_floor_usd": 1000000,
+    "geographies": [
+      "US",
+      "UK",
+      "EU"
+    ],
+    "thesis_notes": "Vertical SaaS with B2B focus and retention strong",
+    "example_deals": [
+      "ShopTrack Cloud",
+      "RigOps Software"
+    ]
+  },
+  {
+    "name": "MedVista Equity",
+    "sectors": [
+      "healthcare"
+    ],
+    "subsector_keywords": [
+      "dental",
+      "vet",
+      "MSO",
+      "clinic",
+      "ambulatory"
+    ],
+    "deal_types": [
+      "platform",
+      "add on",
+      "control"
+    ],
+    "check_size_usd_min": 20000000,
+    "check_size_usd_max": 150000000,
+    "revenue_floor_usd": 10000000,
+    "ebitda_floor_usd": 2000000,
+    "geographies": [
+      "US"
+    ],
+    "thesis_notes": "Multi site provider services rollups",
+    "example_deals": [
+      "SmileWell Dental",
+      "PawsCare Vet Group"
+    ]
+  }
+]
