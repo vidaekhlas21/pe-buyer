@@ -70,14 +70,14 @@ FUND_CATALOG = load_catalog()
 class CompanyFacts(BaseModel):
     canonical_url: str
     company_name: Optional[str] = None
-    industry: Optional[Literal]["software","healthcare services","consumer","industrials","business services","fintech","other"] = None
+    industry: Optional[Literal["software","healthcare services","consumer","industrials","business services","fintech","other"]] = None
     subsector: Optional[str] = None
     hq_city: Optional[str] = None
     hq_country: Optional[str] = None
     operating_regions: Optional[List[str]] = None
     estimated_employees: Optional[int] = None
     estimated_revenue_usd: Optional[float] = None
-    business_model: Optional[Literal]["B2B","B2C","B2B2C","marketplace","other"] = None
+    business_model: Optional[Literal["B2B","B2C","B2B2C","marketplace","other"]] = None
     offerings: Optional[List[str]] = None
     customer_segments: Optional[List[str]] = None
     growth_signals: Optional[List[str]] = None
@@ -157,6 +157,7 @@ MatchResult JSON schema:
 Return only a JSON array.
 """
 
+# ----------------- Fetch and clean -----------------
 def fetch_text(url: str) -> Dict[str, str]:
     pages = {}
     base = url.rstrip("/")
@@ -180,6 +181,7 @@ def fetch_text(url: str) -> Dict[str, str]:
 def join_pages(pages: Dict[str, str]) -> str:
     return "\\n\\n".join([f"[{path}]\\n{txt}" for path, txt in pages.items()])
 
+# ----------------- Catalog helpers -----------------
 def sectors_from_facts(facts: CompanyFacts) -> List[str]:
     s = set()
     if facts.industry:
@@ -199,6 +201,7 @@ def filter_catalog(catalog, sectors: List[str]):
             res.append(f)
     return res or catalog
 
+# ----------------- Deterministic sanity wrapper -----------------
 def sanity_adjust(results: List[MatchResult], facts: CompanyFacts) -> List[MatchResult]:
     def size_adj(cm: CriteriaMatches):
         if cm.size == "likely": return 25
@@ -221,14 +224,14 @@ def sanity_adjust(results: List[MatchResult], facts: CompanyFacts) -> List[Match
     adjusted.sort(key=lambda x: x.fit_score, reverse=True)
     return adjusted[:5]
 
-import streamlit as st
+# ----------------- UI -----------------
 st.set_page_config(page_title="PE Buyer Shortlist Prototype", layout="wide")
 st.title("PE Buyer Shortlist from a Company URL")
 
 with st.sidebar:
     st.markdown("Settings")
-    model_extract = st.text_input("Extraction model", "gpt-4o-mini")
-    model_match = st.text_input("Matching model", "gpt-4o")
+    model_extract = st.text_input("Extraction model", MODEL_EXTRACT)
+    model_match = st.text_input("Matching model", MODEL_MATCH)
     temp_extract = st.slider("Extract temperature", 0.0, 0.5, 0.0, 0.1)
     temp_match = st.slider("Match temperature", 0.0, 0.7, 0.0, 0.1)
     st.divider()
@@ -238,7 +241,6 @@ url = st.text_input("Company URL")
 go = st.button("Analyze", type="primary")
 
 if go and url:
-    import time
     t0 = time.time()
     pages = fetch_text(url)
     if not pages:
@@ -250,6 +252,7 @@ if go and url:
 
     raw_text = join_pages(pages)
 
+    # LLM extraction
     try:
         sys = PROMPT_A_SYS
         user = prompt_a_user(url, raw_text)
@@ -274,9 +277,11 @@ if go and url:
             st.caption("Evidence")
             st.json(facts.evidence)
 
+    # filter catalog
     sectors = sectors_from_facts(facts)
     catalog_chunk = filter_catalog(FUND_CATALOG, sectors)
 
+    # LLM matching
     try:
         sys_b = PROMPT_B_SYS
         user_b = prompt_b_user(facts.model_dump_json(exclude_none=True, indent=2),
@@ -315,6 +320,7 @@ if go and url:
                                   r.criteria_matches.deal_type]
                     })
 
+    # quick edit and rerun
     st.subheader("Quick edit and rerun")
     edited_industry = st.selectbox(
         "Industry",
@@ -327,7 +333,7 @@ if go and url:
         catalog_chunk = filter_catalog(FUND_CATALOG, sectors)
         user_b = prompt_b_user(facts.model_dump_json(exclude_none=True, indent=2),
                                json.dumps(catalog_chunk))
-        matches_raw = openai_chat("gpt-4o", PROMPT_B_SYS, user_b, temperature=0.0)
+        matches_raw = openai_chat(MODEL_MATCH, PROMPT_B_SYS, user_b, temperature=0.0)
         matches_raw = matches_raw.strip().strip("`")
         parsed = json.loads(matches_raw)
         results = [MatchResult(**m) for m in parsed]
@@ -336,12 +342,12 @@ if go and url:
         for r in results:
             st.write(f"{r.fund}  Score {r.fit_score}")
 
+    # downloads and run stats
     st.subheader("Download results")
     st.download_button("CompanyFacts JSON", facts.model_dump_json(exclude_none=True, indent=2),
                        file_name="company_facts.json", mime="application/json")
     st.download_button("MatchResults JSON", json.dumps([r.model_dump() for r in results], indent=2),
                        file_name="match_results.json", mime="application/json")
 
-    import time
     elapsed = time.time() - t0
     st.caption(f"Run time approximately {elapsed:.2f} seconds")
