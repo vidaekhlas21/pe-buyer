@@ -134,13 +134,16 @@ Text:
 {truncated}
 """
 
+
 PROMPT_B_SYS = (
     "You are a private equity associate. Given one CompanyFacts object and a fund catalog chunk, "
     "score fund fit conservatively. Base score on sector and subsector and geography. "
     "Adjust for size and deal type. Return ONLY a JSON array of MatchResult objects sorted by fit_score. "
     "If sector or subsector do not match, score should be low. "
-    "Do not invent numbers."
+    "Do not invent numbers. "
+    "Return exactly and only a valid JSON array. No prose, no code fences."
 )
+
 
 def prompt_b_user(company_json: str, catalog_chunk: str) -> str:
     schema_hint = json.dumps(MatchResult.model_json_schema(), indent=2)
@@ -156,6 +159,28 @@ MatchResult JSON schema:
 
 Return only a JSON array.
 """
+def parse_json_array_or_raise(text: str):
+    """Tolerant parser that extracts the first JSON array from text."""
+    import json
+    t = (text or "").strip().strip("`").strip()
+    # grab the first [...] block
+    start = t.find('[')
+    end = t.rfind(']')
+    if start == -1 or end == -1 or end <= start:
+        raise ValueError("No JSON array found in model response")
+    return json.loads(t[start:end+1])
+
+
+def looks_like_quota_or_auth_error(text: str) -> bool:
+    t = (text or "").lower()
+    return any(s in t for s in [
+        "you exceeded your current quota",
+        "insufficient_quota",
+        "billing",
+        "invalid_api_key",
+        "incorrect api key",
+        "authentication error"
+    ])
 
 # ----------------- Fetch and clean -----------------
 def fetch_text(url: str) -> Dict[str, str]:
@@ -287,9 +312,34 @@ if go and url:
         user_b = prompt_b_user(facts.model_dump_json(exclude_none=True, indent=2),
                                json.dumps(catalog_chunk))
         matches_raw = openai_chat(model_match, sys_b, user_b, temperature=temp_match)
-        matches_raw = matches_raw.strip().strip("`")
-        parsed = json.loads(matches_raw)
+    
+        # Always show raw once for debugging (collapsible)
+        with st.expander("Debug: raw matching response"):
+            st.code(matches_raw)
+    
+        # If the API returned a quota/auth message, surface it clearly
+        if looks_like_quota_or_auth_error(matches_raw):
+            st.error("OpenAI returned a quota/auth error during matching. Check billing and your API key.")
+            st.stop()
+    
+        # First parse attempt
+        try:
+            parsed = parse_json_array_or_raise(matches_raw)
+        except Exception:
+            # Retry once, very strict, temp 0
+            retry_user = user_b + "\n\nReturn exactly and only a valid JSON array. No prose, no code fences."
+            matches_raw_retry = openai_chat(model_match, sys_b, retry_user, temperature=0.0)
+            with st.expander("Debug: raw matching response (retry)"):
+                st.code(matches_raw_retry)
+    
+            if looks_like_quota_or_auth_error(matches_raw_retry):
+                st.error("OpenAI returned a quota/auth error on retry. Check billing and your API key.")
+                st.stop()
+    
+            parsed = parse_json_array_or_raise(matches_raw_retry)
+    
         results = [MatchResult(**m) for m in parsed]
+    
     except ValidationError as ve:
         st.error("Schema validation failed for matching")
         st.code(str(ve))
@@ -298,6 +348,7 @@ if go and url:
         st.error("Matching failed")
         st.code(str(e))
         st.stop()
+
 
     results = sanity_adjust(results, facts)
 
